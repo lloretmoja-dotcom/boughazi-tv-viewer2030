@@ -40,7 +40,10 @@
             android:textColorHint="@color/muted_gray"
             android:padding="14dp"
             android:background="@drawable/input_background"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginBottom="12dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusDown="@id/loginPassword" />
 
         <EditText
             android:id="@+id/loginPassword"
@@ -52,7 +55,11 @@
             android:textColorHint="@color/muted_gray"
             android:padding="14dp"
             android:background="@drawable/input_background"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="16dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusUp="@id/loginEmail"
+            android:nextFocusDown="@id/loginSubmitBtn" />
 
         <Button
             android:id="@+id/loginSubmitBtn"
@@ -61,7 +68,11 @@
             android:text="Entrar"
             android:textAllCaps="false"
             android:backgroundTint="@color/accent_blue"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="8dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusUp="@id/loginPassword"
+            android:nextFocusDown="@id/signUpBtn" />
 
         <Button
             android:id="@+id/signUpBtn"
@@ -71,7 +82,11 @@
             android:textAllCaps="false"
             android:background="@drawable/text_button_selector"
             android:textColor="@color/accent_orange"
-            android:layout_marginBottom="4dp" />
+            android:layout_marginBottom="4dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusUp="@id/loginSubmitBtn"
+            android:nextFocusDown="@id/forgotPasswordBtn" />
 
         <Button
             android:id="@+id/forgotPasswordBtn"
@@ -80,7 +95,10 @@
             android:text="¿Olvidaste tu contraseña?"
             android:textAllCaps="false"
             android:background="@drawable/text_button_selector"
-            android:textColor="@color/muted_gray" />
+            android:textColor="@color/muted_gray"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusUp="@id/signUpBtn" />
 
         <TextView
             android:id="@+id/loginError"
@@ -128,7 +146,10 @@
             android:textColorHint="@color/muted_gray"
             android:padding="14dp"
             android:background="@drawable/input_background"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="16dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusDown="@id/codeSubmitBtn" />
 
         <Button
             android:id="@+id/codeSubmitBtn"
@@ -136,7 +157,10 @@
             android:layout_height="wrap_content"
             android:text="Activar"
             android:textAllCaps="false"
-            android:backgroundTint="@color/accent_orange" />
+            android:backgroundTint="@color/accent_orange"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusUp="@id/codeInput" />
 
         <TextView
             android:id="@+id/codeError"

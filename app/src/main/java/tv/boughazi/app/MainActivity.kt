@@ -376,6 +376,15 @@ class MainActivity : AppCompatActivity() {
         loginSection.visibility = if (view == loginSection) View.VISIBLE else View.GONE
         codeSection.visibility = if (view == codeSection) View.VISIBLE else View.GONE
         mainSection.visibility = if (view == mainSection) View.VISIBLE else View.GONE
+        // En la tele, con mando, hay que decirle explícitamente a Android
+        // dónde poner el foco al entrar en cada pantalla — si no, a veces
+        // el mando se queda "perdido" sin saber desde dónde navegar.
+        view.post {
+            when (view) {
+                loginSection -> findViewById<View>(R.id.loginEmail)?.requestFocus()
+                codeSection -> findViewById<View>(R.id.codeInput)?.requestFocus()
+            }
+        }
     }
 
     private fun showError(textView: TextView, message: String) {
