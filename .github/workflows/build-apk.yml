@@ -21,6 +21,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Aceptar licencias del SDK de Android
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
       - name: Indicar a Gradle dónde está el SDK de Android
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
