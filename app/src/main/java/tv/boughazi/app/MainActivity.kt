@@ -184,13 +184,52 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             lifecycleScope.launch {
-                val ok = codeRepository.redeemCode(currentSession, code)
-                if (ok) {
-                    currentSession.hasLinkedCode = true
-                    sessionManager.markCodeLinked()
-                    enterMainSection()
+                attemptRedeem(currentSession, code, errorText, allowRetry = true)
+            }
+        }
+    }
+
+    /**
+     * Intenta activar el código. Si Supabase dice que la sesión ha
+     * caducado (pasa cuando ha pasado más de una hora desde que se
+     * inició sesión, por ejemplo tras estar probando otras cosas),
+     * renueva la sesión automáticamente y lo vuelve a intentar una
+     * vez. Si falla por otro motivo, muestra el detalle técnico real
+     * en pantalla en vez de un mensaje genérico.
+     */
+    private suspend fun attemptRedeem(
+        currentSession: UserSession,
+        code: String,
+        errorText: TextView,
+        allowRetry: Boolean
+    ) {
+        when (val result = codeRepository.redeemCode(currentSession, code)) {
+            is RedeemResult.Success -> {
+                currentSession.hasLinkedCode = true
+                sessionManager.markCodeLinked()
+                enterMainSection()
+            }
+            is RedeemResult.Failure -> {
+                if (allowRetry && (result.httpStatus == 401 || result.httpStatus == 403)) {
+                    when (val refreshed = authRepository.refreshSession(currentSession.refreshToken)) {
+                        is AuthResult.Success -> {
+                            val renewed = refreshed.session.copy(hasLinkedCode = currentSession.hasLinkedCode)
+                            session = renewed
+                            sessionManager.save(renewed)
+                            attemptRedeem(renewed, code, errorText, allowRetry = false)
+                        }
+                        is AuthResult.Failure -> {
+                            showError(
+                                errorText,
+                                "Tu sesión caducó y no se pudo renovar. Cierra la app, entra otra vez con tu Gmail y prueba el código de nuevo."
+                            )
+                        }
+                    }
                 } else {
-                    showError(errorText, "Ese código no es válido o ya se ha usado.")
+                    showError(
+                        errorText,
+                        "Ese código no es válido o ya se ha usado. (Detalle: HTTP ${result.httpStatus} — ${result.detail})"
+                    )
                 }
             }
         }
@@ -211,22 +250,58 @@ class MainActivity : AppCompatActivity() {
         channelsList.layoutManager = LinearLayoutManager(this)
 
         lifecycleScope.launch {
-            allChannels = channelRepository.fetchChannels(currentSession)
-            categories = allChannels.map { it.category }.distinct()
-            loadingText.visibility = View.GONE
+            loadingText.text = "Cargando canales…"
+            loadChannels(currentSession, allowRetry = true)
+        }
+    }
 
-            if (allChannels.isEmpty()) {
-                loadingText.text = "Todavía no hay canales disponibles."
-                loadingText.visibility = View.VISIBLE
-                return@launch
+    /**
+     * Igual que con el código de activación: si la sesión había
+     * caducado (por ejemplo, la tele lleva rato encendida con la app
+     * abierta), la renueva sola y lo vuelve a intentar una vez. Si
+     * falla por otro motivo, muestra el detalle técnico real en vez
+     * de decir sin más "no hay canales".
+     */
+    private suspend fun loadChannels(currentSession: UserSession, allowRetry: Boolean) {
+        when (val result = channelRepository.fetchChannels(currentSession)) {
+            is ChannelsResult.Success -> {
+                allChannels = result.channels
+                categories = allChannels.map { it.category }.distinct()
+                loadingText.visibility = View.GONE
+
+                if (allChannels.isEmpty()) {
+                    loadingText.text = "Todavía no hay canales disponibles."
+                    loadingText.visibility = View.VISIBLE
+                    return
+                }
+
+                categoriesList.adapter = RowAdapter(
+                    categories.map { RowItem(title = it) }
+                ) { position -> onCategorySelected(categories[position]) }
+
+                playChannel(0)
+                startPresenceHeartbeat()
             }
-
-            categoriesList.adapter = RowAdapter(
-                categories.map { RowItem(title = it) }
-            ) { position -> onCategorySelected(categories[position]) }
-
-            playChannel(0)
-            startPresenceHeartbeat()
+            is ChannelsResult.Failure -> {
+                if (allowRetry && (result.httpStatus == 401 || result.httpStatus == 403)) {
+                    when (val refreshed = authRepository.refreshSession(currentSession.refreshToken)) {
+                        is AuthResult.Success -> {
+                            val renewed = refreshed.session.copy(hasLinkedCode = currentSession.hasLinkedCode)
+                            session = renewed
+                            sessionManager.save(renewed)
+                            loadChannels(renewed, allowRetry = false)
+                        }
+                        is AuthResult.Failure -> {
+                            loadingText.text = "Tu sesión ha caducado. Sal de la app y vuelve a entrar con tu Gmail."
+                            loadingText.visibility = View.VISIBLE
+                        }
+                    }
+                } else {
+                    loadingText.text =
+                        "No se pudieron cargar los canales. (Detalle: HTTP ${result.httpStatus} — ${result.detail})"
+                    loadingText.visibility = View.VISIBLE
+                }
+            }
         }
     }
 

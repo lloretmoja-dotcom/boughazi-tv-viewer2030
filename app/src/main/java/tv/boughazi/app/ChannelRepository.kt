@@ -3,8 +3,19 @@ package tv.boughazi.app
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+
+/**
+ * Igual que con el código de activación: si algo falla (por ejemplo
+ * la sesión ha caducado) queremos saber el motivo REAL en vez de
+ * quedarnos callados y decir "no hay canales" sin más.
+ */
+sealed class ChannelsResult {
+    data class Success(val channels: List<Channel>) : ChannelsResult()
+    data class Failure(val httpStatus: Int, val detail: String) : ChannelsResult()
+}
 
 /**
  * Descarga la lista de canales de Supabase. Se llama una sola vez
@@ -14,7 +25,7 @@ import java.net.URL
  */
 class ChannelRepository {
 
-    suspend fun fetchChannels(session: UserSession): List<Channel> = withContext(Dispatchers.IO) {
+    suspend fun fetchChannels(session: UserSession): ChannelsResult = withContext(Dispatchers.IO) {
         val url = URL(
             "${SupabaseConfig.URL}/rest/v1/bt_channels" +
                 "?select=id,channel_number,name,category,logo_url,stream_url,is_broken" +
@@ -28,12 +39,17 @@ class ChannelRepository {
         conn.connectTimeout = 15000
         conn.readTimeout = 15000
 
-        val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
-        val text = stream?.bufferedReader()?.use { it.readText() } ?: "[]"
+        val status = conn.responseCode
+        val stream = if (status in 200..299) conn.inputStream else conn.errorStream
+        val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
 
-        val result = mutableListOf<Channel>()
+        if (status !in 200..299) {
+            return@withContext ChannelsResult.Failure(status, describeError(text))
+        }
+
         try {
             val arr = JSONArray(text)
+            val result = mutableListOf<Channel>()
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 result.add(
@@ -47,9 +63,18 @@ class ChannelRepository {
                     )
                 )
             }
+            ChannelsResult.Success(result)
         } catch (e: Exception) {
-            // Si algo falla, devolvemos lo que llevemos (lista vacía en el peor caso).
+            ChannelsResult.Failure(status, "Respuesta inesperada de Supabase: ${e.message}")
         }
-        result
+    }
+
+    private fun describeError(rawBody: String): String {
+        return try {
+            val obj = JSONObject(rawBody)
+            obj.optString("message", obj.optString("msg", rawBody)).ifBlank { rawBody }
+        } catch (e: Exception) {
+            rawBody
+        }
     }
 }

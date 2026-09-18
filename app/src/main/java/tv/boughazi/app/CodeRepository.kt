@@ -13,15 +13,20 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Comprueba y "reclama" el código de activación que el usuario
- * introduce la primera vez que abre la app. Un código solo se
- * puede usar una vez (lo controla la propia base de datos, no esta
- * app, así que no se puede hacer trampa).
+ * Resultado de intentar activar un código. A diferencia de antes, si
+ * falla guardamos el motivo REAL (código HTTP + texto que responde
+ * Supabase) en vez de solo decir "false" — así se puede ver en
+ * pantalla qué está pasando de verdad, en lugar de adivinar.
  */
+sealed class RedeemResult {
+    object Success : RedeemResult()
+    data class Failure(val httpStatus: Int, val detail: String) : RedeemResult()
+}
+
+private data class PatchResult(val status: Int, val array: JSONArray?, val rawBody: String)
+
 class CodeRepository {
 
-    /** Comprueba si esta cuenta ya vinculó un código antes (por ejemplo,
-     *  desde otro dispositivo), para no volver a pedírselo. */
     suspend fun checkAlreadyLinked(session: UserSession): Boolean = withContext(Dispatchers.IO) {
         try {
             val url = URL(
@@ -44,7 +49,7 @@ class CodeRepository {
         }
     }
 
-    suspend fun redeemCode(session: UserSession, code: String): Boolean =
+    suspend fun redeemCode(session: UserSession, code: String): RedeemResult =
         withContext(Dispatchers.IO) {
             val nowIso = isoNow()
             val claimUrl = URL(
@@ -55,21 +60,42 @@ class CodeRepository {
                 put("used_by_email", session.email)
                 put("used_at", nowIso)
             }
-            val claimResponse = patchJson(claimUrl, session.accessToken, claimBody)
-            if (claimResponse !is JSONArray || claimResponse.length() == 0) {
-                return@withContext false
+            val claimResult = patchJson(claimUrl, session.accessToken, claimBody)
+
+            if (claimResult.status !in 200..299) {
+                return@withContext RedeemResult.Failure(
+                    claimResult.status,
+                    describeError(claimResult.rawBody)
+                )
+            }
+            if (claimResult.array == null || claimResult.array.length() == 0) {
+                // La petición fue "correcta" (200) pero no devolvió ninguna
+                // fila: o el código ya no cumple el filtro (ya usado / no
+                // existe), o una política de RLS está bloqueando la
+                // lectura de la fila tras actualizarla.
+                return@withContext RedeemResult.Failure(
+                    claimResult.status,
+                    "No se actualizó ninguna fila (respuesta vacía: '${claimResult.rawBody}')"
+                )
             }
 
-            // Guardamos también en la ficha del propio espectador que ya
-            // vinculó su código (por si se quiere consultar más adelante).
             val viewerUrl = URL("${SupabaseConfig.URL}/rest/v1/bt_viewers?id=eq.${session.userId}")
             val viewerBody = JSONObject().apply {
                 put("linked_code", code.trim().uppercase())
                 put("linked_at", nowIso)
             }
             patchJson(viewerUrl, session.accessToken, viewerBody)
-            true
+            RedeemResult.Success
         }
+
+    private fun describeError(rawBody: String): String {
+        return try {
+            val obj = JSONObject(rawBody)
+            obj.optString("message", obj.optString("msg", rawBody)).ifBlank { rawBody }
+        } catch (e: Exception) {
+            rawBody
+        }
+    }
 
     private fun isoNow(): String {
         val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
@@ -77,7 +103,7 @@ class CodeRepository {
         return fmt.format(Date())
     }
 
-    private fun patchJson(url: URL, accessToken: String, body: JSONObject): Any {
+    private fun patchJson(url: URL, accessToken: String, body: JSONObject): PatchResult {
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = "PATCH"
         conn.setRequestProperty("Content-Type", "application/json")
@@ -89,12 +115,14 @@ class CodeRepository {
         conn.readTimeout = 15000
         OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
 
-        val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
-        val text = stream?.bufferedReader()?.use { it.readText() } ?: "[]"
-        return try {
+        val status = conn.responseCode
+        val stream = if (status in 200..299) conn.inputStream else conn.errorStream
+        val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+        val array = try {
             JSONArray(text)
         } catch (e: Exception) {
-            JSONObject()
+            null
         }
+        return PatchResult(status, array, text)
     }
 }

@@ -62,6 +62,27 @@ class AuthRepository {
         }
     }
 
+    /**
+     * El token de acceso de Supabase caduca (normalmente en 1 hora).
+     * Si ha pasado tiempo entre iniciar sesión y hacer otra cosa (por
+     * ejemplo activar el código), hay que renovarlo con el refresh_token
+     * guardado, en vez de obligar a la persona a salir y volver a entrar.
+     */
+    suspend fun refreshSession(refreshToken: String): AuthResult = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("${SupabaseConfig.URL}/auth/v1/token?grant_type=refresh_token")
+            val body = JSONObject().apply { put("refresh_token", refreshToken) }
+            val json = postJson(url, body)
+            if (json.has("access_token")) {
+                AuthResult.Success(toSession(json))
+            } else {
+                AuthResult.Failure(errorMessage(json))
+            }
+        } catch (e: Exception) {
+            AuthResult.Failure(e.message ?: "No se pudo renovar la sesión.")
+        }
+    }
+
     suspend fun sendPasswordReset(email: String): AuthResult = withContext(Dispatchers.IO) {
         try {
             val url = URL("${SupabaseConfig.URL}/auth/v1/recover")
