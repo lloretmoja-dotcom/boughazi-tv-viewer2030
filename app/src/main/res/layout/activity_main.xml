@@ -29,15 +29,11 @@
             android:textSize="32sp"
             android:textStyle="bold" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="VERSIÓN DE PRUEBA 25"
-            android:textColor="#FFEB3B"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="24dp" />
-
+        <!-- Marca de comprobación: un número que cambia en cada versión
+             que te mando, para saber sin ninguna duda si lo que se ha
+             instalado es de verdad esta última o sigue siendo una
+             vieja. No tiene nada que ver con los canales, es solo para
+             comprobar la instalación. -->
         <EditText
             android:id="@+id/loginEmail"
             android:layout_width="320dp"
@@ -202,6 +198,9 @@
             android:background="#CC0B0E14"
             android:visibility="gone">
 
+            <!-- Aviso de diagnóstico: cuántos canales/países se han
+                 cargado de verdad. Fijo (no desaparece solo), en el
+                 mismo sitio de siempre para no perdérselo. -->
             <TextView
                 android:id="@+id/debugInfoText"
                 android:layout_width="match_parent"
