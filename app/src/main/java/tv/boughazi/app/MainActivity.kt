@@ -386,6 +386,23 @@ class MainActivity : AppCompatActivity() {
         categoriesList.requestFocus()
     }
 
+    /**
+     * Al pulsar OK mientras se está viendo un canal, abrimos la lista
+     * directamente en el país y canal donde se está en ese momento,
+     * para que se vea de un vistazo "dónde estoy" y se pueda cambiar
+     * sin tener que buscar desde el principio.
+     */
+    private fun openBrowserAtCurrentChannel() {
+        categoriesColumn.visibility = View.VISIBLE
+        val current = allChannels.getOrNull(currentIndex)
+        if (current != null) {
+            onCategorySelected(current.category)
+            channelsList.requestFocus()
+        } else {
+            categoriesList.requestFocus()
+        }
+    }
+
     private fun hideChannelBrowser() {
         categoriesColumn.visibility = View.GONE
         channelsList.visibility = View.GONE
@@ -438,6 +455,12 @@ class MainActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (categoriesColumn.visibility != View.VISIBLE && channelsList.visibility != View.VISIBLE) {
                     showChannelBrowser()
+                    return true
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                if (categoriesColumn.visibility != View.VISIBLE && channelsList.visibility != View.VISIBLE) {
+                    openBrowserAtCurrentChannel()
                     return true
                 }
             }
