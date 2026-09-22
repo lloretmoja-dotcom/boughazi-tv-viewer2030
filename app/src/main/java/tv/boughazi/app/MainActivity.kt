@@ -270,11 +270,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateDebugInfo(loaded: Int, categoriesCount: Int, totalOnServer: Int?) {
-        debugInfoText.text = if (totalOnServer != null)
-            "$loaded de $totalOnServer canales\n$categoriesCount países"
-        else
-            "$loaded canales\n$categoriesCount países"
-        debugInfoText.visibility = View.VISIBLE
+        // Aviso de pruebas ya no visible: la app está lista para usuarios
+        // reales. Se deja la función (no se borra) por si hiciera falta
+        // reactivar el aviso más adelante para investigar algo.
+        debugInfoText.visibility = View.GONE
     }
 
     private suspend fun refreshChannelsQuietly(currentSession: UserSession, allowRetry: Boolean) {
@@ -316,8 +315,8 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
-                debugInfoText.text = "Fallo al actualizar:\nHTTP ${result.httpStatus} — ${result.detail}"
-                debugInfoText.visibility = View.VISIBLE
+                // Fallo silencioso también en los demás casos: se reintenta solo
+                // en el siguiente ciclo, sin mostrar ningún aviso en pantalla.
             }
         }
     }
