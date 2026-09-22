@@ -1,4 +1,4 @@
-name: Compilar APK de Boughazi-TV
+name: Compilar APK de Boughazi.tv
 
 on:
   push:
@@ -21,9 +21,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Aceptar licencias del SDK de Android
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
       - name: Indicar a Gradle dónde está el SDK de Android
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
@@ -35,19 +32,21 @@ jobs:
       - name: Compilar el APK (debug, listo para instalar directamente)
         run: gradle assembleDebug --stacktrace
 
+      - name: Renombrar el APK con un nombre único para esta compilación
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/app-debug-${{ github.run_number }}.apk
+
       - name: Subir el APK como resultado descargable (copia de seguridad)
         uses: actions/upload-artifact@v4
         with:
-          name: boughazi-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: boughazi-apk-${{ github.run_number }}
+          path: app/build/outputs/apk/debug/app-debug-${{ github.run_number }}.apk
 
       - name: Publicar el APK en un enlace permanente (para instalar con Downloader)
         uses: ncipollo/release-action@v1
         with:
           tag: ultima-version
           name: "Boughazi-TV — última versión"
-          body: "Instala esta app en tu televisor con la app Downloader, usando este mismo enlace."
+          body: "Instala esta app en tu televisor con la app Downloader, usando el enlace concreto de esta compilación."
           allowUpdates: true
-          replacesArtifacts: true
-          artifacts: app/build/outputs/apk/debug/app-debug.apk
+          artifacts: app/build/outputs/apk/debug/app-debug-${{ github.run_number }}.apk
           token: ${{ secrets.GITHUB_TOKEN }}
