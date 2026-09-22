@@ -479,4 +479,64 @@ class MainActivity : AppCompatActivity() {
         val runnable = object : Runnable {
             override fun run() {
                 val currentSession = session ?: return
-                val channelId = allChannels.getOrNull(currentIndex)?.i
+                val channelId = allChannels.getOrNull(currentIndex)?.id
+                lifecycleScope.launch { presenceRepository.ping(currentSession, channelId) }
+                handler.postDelayed(this, 20000)
+            }
+        }
+        presenceRunnable = runnable
+        handler.post(runnable)
+    }
+
+    private fun updatePresenceChannel(channelId: String) {
+        val currentSession = session ?: return
+        lifecycleScope.launch { presenceRepository.ping(currentSession, channelId) }
+    }
+
+    private fun setupAdBanner() {
+        val testAdUnitId = "ca-app-pub-3940256099942544/6300978111"
+        val adView = AdView(this)
+        adView.adUnitId = testAdUnitId
+        adView.setAdSize(AdSize.BANNER)
+        findViewById<android.widget.FrameLayout>(R.id.adContainer).addView(adView)
+        adView.loadAd(AdRequest.Builder().build())
+    }
+
+    private fun showOnly(view: View) {
+        loginSection.visibility = if (view == loginSection) View.VISIBLE else View.GONE
+        codeSection.visibility = if (view == codeSection) View.VISIBLE else View.GONE
+        mainSection.visibility = if (view == mainSection) View.VISIBLE else View.GONE
+        view.post {
+            when (view) {
+                loginSection -> findViewById<View>(R.id.loginEmail)?.requestFocus()
+                codeSection -> findViewById<View>(R.id.codeInput)?.requestFocus()
+            }
+        }
+    }
+
+    private fun showError(textView: TextView, message: String) {
+        textView.text = message
+        textView.visibility = View.VISIBLE
+    }
+
+    override fun onStop() {
+        super.onStop()
+        exoPlayer?.playWhenReady = false
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (currentIndex in allChannels.indices) {
+            playChannel(currentIndex)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        presenceRunnable?.let { handler.removeCallbacks(it) }
+        osdHideRunnable?.let { handler.removeCallbacks(it) }
+        numberEntryRunnable?.let { handler.removeCallbacks(it) }
+        channelRefreshRunnable?.let { handler.removeCallbacks(it) }
+        exoPlayer?.release()
+    }
+}
