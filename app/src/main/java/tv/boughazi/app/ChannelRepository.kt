@@ -13,7 +13,7 @@ import java.net.URL
  * quedarnos callados y decir "no hay canales" sin más.
  */
 sealed class ChannelsResult {
-    data class Success(val channels: List<Channel>) : ChannelsResult()
+    data class Success(val channels: List<Channel>, val totalReportedByServer: Int?) : ChannelsResult()
     data class Failure(val httpStatus: Int, val detail: String) : ChannelsResult()
 }
 
@@ -26,47 +26,77 @@ sealed class ChannelsResult {
 class ChannelRepository {
 
     suspend fun fetchChannels(session: UserSession): ChannelsResult = withContext(Dispatchers.IO) {
-        val url = URL(
-            "${SupabaseConfig.URL}/rest/v1/bt_channels" +
-                "?select=id,channel_number,name,category,logo_url,stream_url,is_broken" +
-                "&is_broken=eq.false" +
-                "&order=channel_number.asc.nullslast"
-        )
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("apikey", SupabaseConfig.ANON_KEY)
-        conn.setRequestProperty("Authorization", "Bearer ${session.accessToken}")
-        conn.connectTimeout = 15000
-        conn.readTimeout = 15000
+        // Supabase solo entrega 1000 filas como máximo en cada petición.
+        // Como ya hay más de 1000 canales, los pedimos por partes (de
+        // 1000 en 1000) hasta traerlos todos, para que no se corte la
+        // lista al llegar al canal número 1000.
+        val pageSize = 1000
+        var offset = 0
+        var page = 1
+        var totalReportedByServer: Int? = null
+        val allChannels = mutableListOf<Channel>()
 
-        val status = conn.responseCode
-        val stream = if (status in 200..299) conn.inputStream else conn.errorStream
-        val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+        while (true) {
+            try {
+                val url = URL(
+                    "${SupabaseConfig.URL}/rest/v1/bt_channels" +
+                        "?select=id,channel_number,name,category,logo_url,stream_url,is_broken" +
+                        "&is_broken=eq.false" +
+                        "&order=channel_number.asc.nullslast"
+                )
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("apikey", SupabaseConfig.ANON_KEY)
+                conn.setRequestProperty("Authorization", "Bearer ${session.accessToken}")
+                conn.setRequestProperty("Range-Unit", "items")
+                conn.setRequestProperty("Range", "$offset-${offset + pageSize - 1}")
+                conn.setRequestProperty("Prefer", "count=exact")
+                conn.connectTimeout = 15000
+                conn.readTimeout = 15000
 
-        if (status !in 200..299) {
-            return@withContext ChannelsResult.Failure(status, describeError(text))
-        }
+                val status = conn.responseCode
+                val contentRange = conn.getHeaderField("Content-Range")
+                val stream = if (status in 200..299) conn.inputStream else conn.errorStream
+                val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
 
-        try {
-            val arr = JSONArray(text)
-            val result = mutableListOf<Channel>()
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                result.add(
-                    Channel(
-                        id = o.getString("id"),
-                        channelNumber = if (o.isNull("channel_number")) null else o.getInt("channel_number"),
-                        name = o.optString("name", ""),
-                        category = o.optString("category", "General"),
-                        logoUrl = if (o.isNull("logo_url")) null else o.getString("logo_url"),
-                        streamUrl = o.optString("stream_url", "")
+                if (status !in 200..299) {
+                    return@withContext ChannelsResult.Failure(
+                        status,
+                        "Tanda $page (canales $offset en adelante): ${describeError(text)}"
                     )
+                }
+
+                if (page == 1 && contentRange != null) {
+                    totalReportedByServer = contentRange.substringAfter("/", "").toIntOrNull()
+                }
+
+                val arr = JSONArray(text)
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    allChannels.add(
+                        Channel(
+                            id = o.getString("id"),
+                            channelNumber = if (o.isNull("channel_number")) null else o.getInt("channel_number"),
+                            name = o.optString("name", ""),
+                            category = o.optString("category", "General"),
+                            logoUrl = if (o.isNull("logo_url")) null else o.getString("logo_url"),
+                            streamUrl = o.optString("stream_url", "")
+                        )
+                    )
+                }
+
+                if (arr.length() < pageSize) break
+                offset += pageSize
+                page += 1
+            } catch (e: Exception) {
+                return@withContext ChannelsResult.Failure(
+                    -1,
+                    "Fallo de conexión en la tanda $page (canales $offset en adelante): ${e.javaClass.simpleName} — ${e.message}"
                 )
             }
-            ChannelsResult.Success(result)
-        } catch (e: Exception) {
-            ChannelsResult.Failure(status, "Respuesta inesperada de Supabase: ${e.message}")
         }
+
+        ChannelsResult.Success(allChannels, totalReportedByServer)
     }
 
     private fun describeError(rawBody: String): String {
