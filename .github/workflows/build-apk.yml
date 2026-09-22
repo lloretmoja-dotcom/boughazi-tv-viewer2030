@@ -32,21 +32,19 @@ jobs:
       - name: Compilar el APK (debug, listo para instalar directamente)
         run: gradle assembleDebug --stacktrace
 
-      - name: Renombrar el APK con un nombre único para esta compilación
-        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/app-debug-${{ github.run_number }}.apk
-
       - name: Subir el APK como resultado descargable (copia de seguridad)
         uses: actions/upload-artifact@v4
         with:
-          name: boughazi-apk-${{ github.run_number }}
-          path: app/build/outputs/apk/debug/app-debug-${{ github.run_number }}.apk
+          name: boughazi-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publicar el APK en un enlace permanente (para instalar con Downloader)
         uses: ncipollo/release-action@v1
         with:
           tag: ultima-version
           name: "Boughazi-TV — última versión"
-          body: "Instala esta app en tu televisor con la app Downloader, usando el enlace concreto de esta compilación."
+          body: "Instala esta app en tu televisor con la app Downloader, usando este mismo enlace."
           allowUpdates: true
-          artifacts: app/build/outputs/apk/debug/app-debug-${{ github.run_number }}.apk
+          replacesArtifacts: true
+          artifacts: app/build/outputs/apk/debug/app-debug.apk
           token: ${{ secrets.GITHUB_TOKEN }}
