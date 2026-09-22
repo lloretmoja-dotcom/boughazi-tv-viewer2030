@@ -27,6 +27,14 @@
             android:text="@string/app_name"
             android:textColor="@color/white"
             android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="VERSIÓN DE PRUEBA 25"
+            android:textColor="#FFEB3B"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:layout_marginBottom="24dp" />
 
@@ -186,13 +194,32 @@
             app:resize_mode="fill" />
 
         <!-- Categorías (izquierda) -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/categoriesList"
+        <LinearLayout
+            android:id="@+id/categoriesColumn"
             android:layout_width="220dp"
             android:layout_height="match_parent"
+            android:orientation="vertical"
             android:background="#CC0B0E14"
-            android:paddingTop="24dp"
-            android:visibility="gone" />
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/debugInfoText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#FFEB3B"
+                android:padding="10dp"
+                android:textColor="#000000"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/categoriesList"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:paddingTop="24dp" />
+        </LinearLayout>
 
         <!-- Canales de la categoría elegida -->
         <androidx.recyclerview.widget.RecyclerView
