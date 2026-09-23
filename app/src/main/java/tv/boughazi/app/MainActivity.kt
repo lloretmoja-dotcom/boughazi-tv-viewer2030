@@ -369,7 +369,7 @@ class MainActivity : AppCompatActivity() {
     private fun onCategorySelected(category: String) {
         val channelsInCategory = allChannels.filter { it.category == category }
         channelsList.adapter = RowAdapter(
-            channelsInCategory.map { RowItem(title = "${it.channelNumber ?: "-"}  ${it.name}") }
+            channelsInCategory.mapIndexed { idx, it -> RowItem(title = "${idx + 1}  ${it.name}") }
         ) { position ->
             val chosen = channelsInCategory[position]
             val flatIndex = allChannels.indexOfFirst { it.id == chosen.id }
@@ -421,11 +421,38 @@ class MainActivity : AppCompatActivity() {
         updatePresenceChannel(channel.id)
     }
 
-    private fun zapNext() = playChannel((currentIndex + 1).let { if (it >= allChannels.size) 0 else it })
-    private fun zapPrevious() = playChannel((currentIndex - 1).let { if (it < 0) allChannels.size - 1 else it })
+    // Al cambiar de canal con el mando (CH+/CH-), nos quedamos siempre
+    // dentro del mismo país: al llegar al último canal del país se
+    // vuelve al primero (canal 1), y al revés. NO salta solo a otro
+    // país — para eso hay que abrir el buscador (OK) y elegirlo a mano.
+    private fun zapNext() {
+        val current = allChannels.getOrNull(currentIndex) ?: return
+        val channelsInCategory = allChannels.filter { it.category == current.category }
+        val posInCategory = channelsInCategory.indexOfFirst { it.id == current.id }
+        if (posInCategory < 0 || channelsInCategory.isEmpty()) return
+        val nextChannel = channelsInCategory[(posInCategory + 1) % channelsInCategory.size]
+        val flatIndex = allChannels.indexOfFirst { it.id == nextChannel.id }
+        if (flatIndex >= 0) playChannel(flatIndex)
+    }
+
+    private fun zapPrevious() {
+        val current = allChannels.getOrNull(currentIndex) ?: return
+        val channelsInCategory = allChannels.filter { it.category == current.category }
+        val posInCategory = channelsInCategory.indexOfFirst { it.id == current.id }
+        if (posInCategory < 0 || channelsInCategory.isEmpty()) return
+        val prevChannel = channelsInCategory[(posInCategory - 1 + channelsInCategory.size) % channelsInCategory.size]
+        val flatIndex = allChannels.indexOfFirst { it.id == prevChannel.id }
+        if (flatIndex >= 0) playChannel(flatIndex)
+    }
 
     private fun showOsd(channel: Channel) {
-        osdNumber.text = (channel.channelNumber ?: "").toString()
+        // El número que se ve es la posición del canal dentro de SU país
+        // (empieza en 1 en cada país), no el número global guardado en la
+        // base de datos. Así, si se borra un canal, los demás se corren
+        // solos y no quedan huecos.
+        val posInCategory = allChannels.filter { it.category == channel.category }
+            .indexOfFirst { it.id == channel.id } + 1
+        osdNumber.text = posInCategory.toString()
         osdName.text = channel.name
         ImageLoader.load(lifecycleScope, channel.logoUrl, findViewById(R.id.osdLogo))
         osdContainer.visibility = View.VISIBLE
@@ -448,8 +475,15 @@ class MainActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_BACK -> {
                 if (categoriesColumn.visibility == View.VISIBLE || channelsList.visibility == View.VISIBLE) {
                     hideChannelBrowser()
-                    return true
                 }
+                // Antes, si se pulsaba "atrás" mientras solo se estaba
+                // viendo un canal (sin el buscador abierto), Android
+                // cerraba la aplicación entera sin avisar — esto es lo
+                // que pasaba cuando, cambiando de canal con el mando, se
+                // rozaba sin querer el botón de atrás. Ahora lo
+                // "absorbemos" siempre aquí para que nunca cierre la app
+                // sola mientras se está viendo la televisión.
+                return true
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (categoriesColumn.visibility != View.VISIBLE && channelsList.visibility != View.VISIBLE) {
@@ -472,6 +506,19 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
+    // Red de seguridad adicional: pase lo que pase con el botón "atrás"
+    // del mando, mientras se está en la pantalla principal (viendo la
+    // tele) nunca dejamos que cierre la aplicación sola.
+    override fun onBackPressed() {
+        if (mainSection.visibility == View.VISIBLE) {
+            if (categoriesColumn.visibility == View.VISIBLE || channelsList.visibility == View.VISIBLE) {
+                hideChannelBrowser()
+            }
+            return
+        }
+        super.onBackPressed()
+    }
+
     private fun onDigitEntered(digit: Int) {
         numberBuffer.append(digit)
         osdNumber.text = numberBuffer.toString()
@@ -488,7 +535,13 @@ class MainActivity : AppCompatActivity() {
         val typed = numberBuffer.toString().toIntOrNull()
         numberBuffer.clear()
         if (typed == null) return
-        val index = allChannels.indexOfFirst { it.channelNumber == typed }
+        // El número tecleado es la posición dentro del país del canal que
+        // se está viendo ahora mismo (cada país empieza a contar desde 1),
+        // no el número global guardado en la base de datos.
+        val currentCategory = allChannels.getOrNull(currentIndex)?.category
+        val channelsInCategory = allChannels.filter { it.category == currentCategory }
+        val chosen = channelsInCategory.getOrNull(typed - 1)
+        val index = if (chosen != null) allChannels.indexOfFirst { it.id == chosen.id } else -1
         if (index >= 0) {
             playChannel(index)
         } else {
