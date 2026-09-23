@@ -1,0 +1,27 @@
+name: Comprobar canales caídos
+
+# Se ejecuta ella sola todas las noches, y también se puede lanzar a
+# mano cuando se quiera desde la pestaña "Actions" de GitHub (botón
+# "Run workflow"), sin tener que esperar a la noche.
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código del repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar la librería necesaria
+        run: pip install aiohttp
+
+      - name: Comprobar todos los canales y ocultar/reactivar los que hagan falta
+        run: python scripts/check_channels.py
