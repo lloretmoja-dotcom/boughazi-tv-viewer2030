@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Boughazi-TV — Panel de administración</title>
+<meta name="robots" content="noindex, nofollow" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ======================= LOGIN ======================= -->
+<main id="login-screen" class="screen login-screen">
+  <div class="login-card">
+    <img class="brand-mark" src="img/logo.png" alt="Boughazi-TV" />
+    <h1>Boughazi<span>-TV</span></h1>
+    <p class="tagline">Panel de administración</p>
+
+    <form id="login-form" autocomplete="off">
+      <label for="login-email">Correo</label>
+      <input id="login-email" type="email" placeholder="admin@tucorreo.com" required />
+
+      <label for="login-password">Contraseña</label>
+      <input id="login-password" type="password" placeholder="••••••••" required />
+
+      <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+    </form>
+    <p id="login-error" class="fine-print error-text hidden"></p>
+    <p class="fine-print">Solo entran las cuentas añadidas en la tabla bt_admins de Supabase.</p>
+  </div>
+</main>
+
+<!-- ======================= PANEL ======================= -->
+<div id="dashboard" class="app hidden">
+
+  <header class="topbar">
+    <img class="brand-mark tiny" src="img/logo.png" alt="Boughazi-TV" />
+    <span class="brand-word">Boughazi<span>-TV</span> <span class="muted">/ admin</span></span>
+    <button id="logout-btn" class="btn btn-ghost">Cerrar sesión</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="stats">Estadísticas</button>
+    <button class="tab" data-tab="channels">Canales</button>
+    <button class="tab" data-tab="codes">Códigos</button>
+  </nav>
+
+  <!-- ---- Estadísticas ---- -->
+  <section id="tab-stats" class="tab-panel">
+    <div class="stat-cards">
+      <div class="stat-card">
+        <span class="stat-number" id="stat-registered">—</span>
+        <span class="stat-label">Usuarios registrados en total</span>
+      </div>
+      <div class="stat-card highlight">
+        <span class="stat-number" id="stat-online">—</span>
+        <span class="stat-label">Viendo la televisión ahora mismo</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-number" id="stat-channels">—</span>
+        <span class="stat-label">Canales activos</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-number stat-text" id="stat-last-check">—</span>
+        <span class="stat-label">Última comprobación automática de canales</span>
+      </div>
+    </div>
+    <p class="fine-print">El número de "viendo ahora" se actualiza solo cada 15 segundos. La comprobación de canales se ejecuta ella sola todas las noches (y se puede ver aquí cuándo fue la última vez, sin depender del color de cada canal).</p>
+  </section>
+
+  <!-- ---- Canales ---- -->
+  <section id="tab-channels" class="tab-panel hidden">
+    <div class="panel-head">
+      <h2>Canales</h2>
+      <div class="panel-head-actions">
+        <button id="check-channels-btn" class="btn">Verificar caídos</button>
+        <button id="import-channels-btn" class="btn">📂 Importar lista</button>
+        <button id="new-channel-btn" class="btn btn-primary">+ Añadir canal</button>
+      </div>
+    </div>
+    <p id="channels-status" class="muted">Cargando canales…</p>
+
+    <div id="bulk-bar" class="bulk-bar hidden">
+      <span id="bulk-count">0 seleccionados</span>
+      <button id="bulk-delete-btn" class="btn danger">🗑 Borrar seleccionados</button>
+      <button id="bulk-clear-btn" class="btn">Cancelar</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all" /></th>
+            <th>#</th><th>Nombre</th><th>Categoría</th><th>Estado</th><th>Stream</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="channels-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ---- Códigos ---- -->
+  <section id="tab-codes" class="tab-panel hidden">
+    <div class="panel-head">
+      <h2>Códigos de acceso</h2>
+      <button id="new-code-btn" class="btn btn-primary">+ Generar código</button>
+    </div>
+    <p class="fine-print">Genera un código y dáselo a la persona que activa su televisión. Lo introduce una sola vez dentro de la app.</p>
+    <div class="table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr><th>Código</th><th>Etiqueta</th><th>Estado</th><th>Usado por</th><th></th></tr>
+        </thead>
+        <tbody id="codes-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<!-- ======================= MODAL: Canal ======================= -->
+<div id="channel-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <button class="modal-close" data-close="channel-modal" aria-label="Cerrar">✕</button>
+    <h3>Añadir canal</h3>
+    <form id="channel-form">
+      <label>Número de canal</label>
+      <input id="cf-number" type="number" min="1" placeholder="Ej: 101" />
+
+      <label>Nombre</label>
+      <input id="cf-name" type="text" required placeholder="Ej: Global News 24" />
+
+      <label>Categoría</label>
+      <input id="cf-category" type="text" placeholder="Ej: Noticias" />
+
+      <label>URL del logo</label>
+      <input id="cf-logo" type="url" placeholder="https://.../logo.png" />
+
+      <label>URL del stream (.m3u8)</label>
+      <input id="cf-src" type="url" required placeholder="https://.../canal.m3u8" />
+
+      <button type="submit" class="btn btn-primary btn-block">Guardar canal</button>
+    </form>
+    <p id="channel-form-error" class="fine-print error-text hidden"></p>
+  </div>
+</div>
+
+<!-- ======================= MODAL: Importar lista ======================= -->
+<div id="import-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <button class="modal-close" data-close="import-modal" aria-label="Cerrar">✕</button>
+    <h3>Importar lista de canales</h3>
+    <p class="fine-print">Sube un archivo M3U o M3U8 con varios canales de una vez, en vez de añadirlos uno a uno con un enlace. También funciona con un archivo de texto simple con un enlace por línea.</p>
+
+    <label>Archivo (.m3u, .m3u8 o .txt)</label>
+    <input id="import-file-input" type="file" accept=".m3u,.m3u8,.txt,text/plain" />
+
+    <label>Categoría para todos estos canales (opcional)</label>
+    <input id="import-category-override" type="text" placeholder="Ej: España, Egipto, Deportes…" />
+    <p class="fine-print">Si la rellenas, todos los canales de este archivo entrarán con esa misma categoría (por ejemplo, el nombre del país), así se quedan agrupados juntos en la app aunque luego importes otros países. Si la dejas en blanco, se usa la categoría que ya traiga el propio archivo.</p>
+
+    <p id="import-status" class="fine-print"></p>
+
+    <div id="import-preview-wrap" class="table-wrap import-preview hidden">
+      <table class="admin-table">
+        <thead>
+          <tr><th><input type="checkbox" id="import-select-all" checked /></th><th>Nombre</th><th>Categoría</th></tr>
+        </thead>
+        <tbody id="import-preview-tbody"></tbody>
+      </table>
+    </div>
+
+    <button id="import-confirm-btn" class="btn btn-primary btn-block hidden">Importar canales</button>
+    <p id="import-error" class="fine-print error-text hidden"></p>
+  </div>
+</div>
+
+<!-- ======================= MODAL: Código nuevo ======================= -->
+<div id="code-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <button class="modal-close" data-close="code-modal" aria-label="Cerrar">✕</button>
+    <h3>Nuevo código generado</h3>
+    <p class="fine-print">Copia este código y dáselo a la persona. Solo se puede usar una vez.</p>
+    <p id="new-code-value" class="code-value"></p>
+    <label>Etiqueta (opcional, para recordar de quién es)</label>
+    <input id="code-label-input" type="text" placeholder="Ej: Familia García" />
+    <button id="code-label-save" class="btn btn-primary btn-block">Guardar etiqueta y cerrar</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
