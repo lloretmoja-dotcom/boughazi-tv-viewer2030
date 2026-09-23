@@ -78,7 +78,7 @@ async def check_one(session, sem, channel):
         return await attempt()
 
 
-async def apply_update(session, channel_id, is_broken):
+async def apply_update(session, sem, channel_id, is_broken):
     url = f"{SUPABASE_URL}/rest/v1/bt_channels?id=eq.{channel_id}"
     headers = {
         "apikey": SUPABASE_ANON_KEY,
@@ -87,10 +87,11 @@ async def apply_update(session, channel_id, is_broken):
         "Prefer": "return=minimal",
     }
     payload = {"is_broken": is_broken, "last_checked_at": _now_iso()}
-    async with session.patch(url, headers=headers, json=payload) as resp:
-        if resp.status not in (200, 204):
-            body = await resp.text()
-            print(f"  ! No se pudo actualizar el canal {channel_id}: HTTP {resp.status} — {body}")
+    async with sem:
+        async with session.patch(url, headers=headers, json=payload) as resp:
+            if resp.status not in (200, 204):
+                body = await resp.text()
+                print(f"  ! No se pudo actualizar el canal {channel_id}: HTTP {resp.status} — {body}")
 
 
 def _now_iso():
@@ -126,11 +127,18 @@ async def main():
         for ch in recovered:
             print(f"  - {ch.get('name')} ({ch['id']})")
 
-        updates = [(ch["id"], True) for ch in newly_hidden] + [
-            (ch["id"], False) for ch in recovered
-        ]
+        # IMPORTANTE: se actualiza la fecha "última comprobación" de TODOS
+        # los canales, no solo de los que cambian de estado. Así, en el
+        # panel de administración se puede ver en cualquier momento cuándo
+        # fue la última vez que el sistema comprobó todo de verdad —
+        # antes no había ninguna prueba visible de que esto se hubiera
+        # ejecutado, y con miles de canales casi siempre en verde, era
+        # imposible distinguir "está bien" de "no se ha comprobado nunca".
+        updates = [(ch["id"], not is_alive) for ch, is_alive in zip(channels, results)]
         if updates:
-            await asyncio.gather(*(apply_update(session, cid, broken) for cid, broken in updates))
+            await asyncio.gather(
+                *(apply_update(session, sem, cid, broken) for cid, broken in updates)
+            )
 
         total_broken_now = sum(1 for alive in results if not alive)
         print(f"\nTotal de canales comprobados: {len(channels)}")
