@@ -6,6 +6,7 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 /**
  * Habla directamente con la API de autenticación de Supabase (por
@@ -43,7 +44,11 @@ class AuthRepository {
 
     suspend fun signUp(email: String, password: String): AuthResult = withContext(Dispatchers.IO) {
         try {
-            val url = URL("${SupabaseConfig.URL}/auth/v1/signup")
+            // "redirect_to" es la página a la que Supabase manda a la
+            // persona después de tocar el enlace de confirmación de su
+            // correo (ver reset-password.html).
+            val redirect = URLEncoder.encode(SupabaseConfig.RESET_PASSWORD_URL, "UTF-8")
+            val url = URL("${SupabaseConfig.URL}/auth/v1/signup?redirect_to=$redirect")
             val body = JSONObject().apply {
                 put("email", email)
                 put("password", password)
@@ -85,7 +90,11 @@ class AuthRepository {
 
     suspend fun sendPasswordReset(email: String): AuthResult = withContext(Dispatchers.IO) {
         try {
-            val url = URL("${SupabaseConfig.URL}/auth/v1/recover")
+            // Igual que arriba: mandamos a la persona a reset-password.html,
+            // que es la página donde de verdad puede escribir su
+            // contraseña nueva.
+            val redirect = URLEncoder.encode(SupabaseConfig.RESET_PASSWORD_URL, "UTF-8")
+            val url = URL("${SupabaseConfig.URL}/auth/v1/recover?redirect_to=$redirect")
             val body = JSONObject().apply { put("email", email) }
             postJson(url, body)
             // Supabase siempre responde con éxito aquí (por seguridad, no
